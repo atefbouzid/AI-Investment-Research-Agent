@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: investment_research_db
+    environment:
+      POSTGRES_DB: investment_research
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - investment_network
+
+  # Backend API
+  backend:
+    build: ./backend
+    container_name: investment_research_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=investment_research
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - JWT_SECRET_KEY=your-secret-key-change-in-production
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+    depends_on:
+      - postgres
+    volumes:
+      - ./backend:/app
+      - ./backend/reports:/app/reports
+    networks:
+      - investment_network
+
+  # Frontend
+  frontend:
+    build: ./frontend
+    container_name: investment_research_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - investment_network
+
+  # Nginx (Optional - for production)
+  nginx:
+    image: nginx:alpine
+    container_name: investment_research_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - investment_network
+
+volumes:
+  postgres_data:
+
+networks:
+  investment_network:
+    driver: bridge
