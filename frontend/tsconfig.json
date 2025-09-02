@@ -1,4 +1,4 @@
-WNLOAnpm {
+{
   "compilerOptions": {
     "lib": [
       "dom",

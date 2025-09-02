@@ -113,12 +113,12 @@ class StockDataCollector:
             dict: Dictionary containing raw news articles ready for LLM analysis
         """
         try:
-            print(f"📰 Collecting news data for {self.ticker}...")
+            print(f"INFO: Collecting news data for {self.ticker}...")
             
             # Get API key from environment
             news_api_key = os.getenv('NEWS_API_KEY')
             if not news_api_key:
-                print("⚠️  NEWS_API_KEY not found in environment variables")
+                print("WARNING: NEWS_API_KEY not found in environment variables")
                 return self._get_fallback_news()
             
             # Get company name for better search
@@ -148,7 +148,7 @@ class StockDataCollector:
             articles = news_data.get('articles', [])
             
             if not articles:
-                print("📰 No recent news found")
+                print("INFO: No recent news found")
                 return self._get_fallback_news()
             
             # Process and clean articles (no sentiment analysis)
@@ -187,16 +187,16 @@ class StockDataCollector:
                 'ready_for_llm_analysis': True  # Flag for LLM processing
             }
             
-            print(f"✅ Collected {len(processed_articles)} relevant news articles")
-            print(f"📊 Ready for LLM analysis")
+            print(f"INFO: Collected {len(processed_articles)} relevant news articles")
+            print(f"INFO: Ready for LLM analysis")
             
             return news_summary
             
         except requests.exceptions.RequestException as e:
-            print(f"❌ Error fetching news: {e}")
+            print(f"ERROR: Error fetching news: {e}")
             return self._get_fallback_news()
         except Exception as e:
-            print(f"❌ Error processing news: {e}")
+            print(f"ERROR: Error processing news: {e}")
             return self._get_fallback_news()
     
     def _is_valid_article(self, article: Dict) -> bool:
@@ -283,7 +283,7 @@ class StockDataCollector:
             dict: Dictionary containing peer comparison analysis
         """
         try:
-            print(f"🏢 Collecting peer comparison data for {self.ticker}...")
+            print(f"INFO: Collecting peer comparison data for {self.ticker}...")
             
             # Get basic info to identify sector
             try:
@@ -292,7 +292,7 @@ class StockDataCollector:
                 industry = info.get('industry', 'Unknown')
                 market_cap = info.get('marketCap', 0)
             except:
-                print("⚠️  Could not get company info for peer analysis")
+                print("WARNING: Could not get company info for peer analysis")
                 return self._get_fallback_peers()
             
             # Define peer companies by sector (we can expand this)
@@ -316,10 +316,10 @@ class StockDataCollector:
             selected_peers = potential_peers[:4]
             
             if not selected_peers:
-                print(f"⚠️  No peers found for sector: {sector}")
+                print(f"WARNING: No peers found for sector: {sector}")
                 return self._get_fallback_peers()
             
-            print(f"📊 Analyzing peers: {', '.join(selected_peers)}")
+            print(f"INFO: Analyzing peers: {', '.join(selected_peers)}")
             
             # Collect peer data
             peer_data = []
@@ -345,11 +345,11 @@ class StockDataCollector:
                     peer_data.append(peer_metrics)
                     
                 except Exception as e:
-                    print(f"⚠️  Could not get data for peer {peer_ticker}: {e}")
+                    print(f"WARNING: Could not get data for peer {peer_ticker}: {e}")
                     continue
             
             if not peer_data:
-                print("❌ No peer data collected")
+                print("WARNING: No peer data collected")
                 return self._get_fallback_peers()
             
             # Calculate sector averages
@@ -381,13 +381,13 @@ class StockDataCollector:
                 'ready_for_llm_analysis': True
             }
             
-            print(f"✅ Collected peer data for {len(peer_data)} companies")
-            print(f"📊 Sector: {sector} | Relative P/E: {relative_metrics.get('pe_ratio_vs_sector', 'N/A')}")
+            print(f"INFO: Collected peer data for {len(peer_data)} companies")
+            print(f"INFO: Sector: {sector} | Relative P/E: {relative_metrics.get('pe_ratio_vs_sector', 'N/A')}")
             
             return peer_analysis
             
         except Exception as e:
-            print(f"❌ Error collecting peer data: {e}")
+            print(f"ERROR: Error collecting peer data: {e}")
             return self._get_fallback_peers()
     
     def _calculate_sector_averages(self, peer_data: List[Dict]) -> Dict:
@@ -460,7 +460,7 @@ class StockDataCollector:
         Returns:
             dict: Complete dataset ready for cleaning and LLM analysis
         """
-        print(f"\n🚀 COLLECTING COMPLETE DATASET FOR {self.ticker}")
+        print(f"\nINFO: Collecting complete dataset for {self.ticker}")
         print("="*60)
         
         # Collect all data types
@@ -501,11 +501,11 @@ class StockDataCollector:
         
         # Show collection summary
         summary = complete_dataset['collection_summary']
-        print(f"\n📊 COLLECTION COMPLETE:")
-        print(f"✅ Data sources: {summary['successful_collections']}/{summary['total_data_sources']}")
-        print(f"📰 News articles: {summary['news_articles_collected']}")
-        print(f"🏢 Peer companies: {summary['peer_companies_analyzed']}")
-        print(f"✅ Ready for data cleaning pipeline")
+        print(f"\nINFO: Collection completed")
+        print(f"Data sources: {summary['successful_collections']}/{summary['total_data_sources']}")
+        print(f"News articles: {summary['news_articles_collected']}")
+        print(f"Peer companies: {summary['peer_companies_analyzed']}")
+        print(f"INFO: Ready for data cleaning pipeline")
         
         return complete_dataset
                 

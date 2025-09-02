@@ -141,7 +141,7 @@ def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
         return None
 
 # Analysis session functions
-def create_analysis_session(user_id: str, ticker: str, use_local_llm: bool = False) -> Optional[str]:
+def create_analysis_session(user_id: str, ticker: str) -> Optional[str]:
     """Create a new analysis session."""
     try:
         # For demo purposes, return a mock session ID
@@ -153,13 +153,13 @@ def create_analysis_session(user_id: str, ticker: str, use_local_llm: bool = Fal
         
         # Production code (when database is set up):
         # command = """
-        #     INSERT INTO analysis_sessions (user_id, ticker, use_local_llm)
-        #     VALUES (%s, %s, %s)
+        #     INSERT INTO analysis_sessions (user_id, ticker)
+        #     VALUES (%s, %s)
         #     RETURNING id
         # """
         # with db_manager.get_connection() as conn:
         #     with conn.cursor() as cursor:
-        #         cursor.execute(command, (user_id, ticker.upper(), use_local_llm))
+        #         cursor.execute(command, (user_id, ticker.upper()))
         #         session_id = cursor.fetchone()[0]
         #         conn.commit()
         #         return str(session_id)
@@ -207,6 +207,245 @@ def save_analysis_result(session_id: str, analysis_data: Dict[str, Any], report_
         ))
     except Exception as e:
         logger.error(f"Save result error: {e}")
+
+def save_report_to_database(user_id: str, session_id: str, ticker: str, company_name: str, 
+                           report_type: str, filename: str, file_content: bytes) -> Optional[str]:
+    """
+    Save report file to database.
+    
+    Args:
+        user_id: User ID who requested the report
+        session_id: Analysis session ID
+        ticker: Stock ticker
+        company_name: Company name
+        report_type: 'pdf' or 'latex'
+        filename: Original filename
+        file_content: File content as bytes
+        
+    Returns:
+        Report ID if successful, None otherwise
+    """
+    try:
+        import uuid
+        
+        # For demo purposes, return a mock report ID
+        # In production with proper database:
+        report_id = str(uuid.uuid4())
+        
+        # Store report metadata (in production this would go to the database)
+        logger.info(f"Report saved to database: {report_id}")
+        logger.info(f"User: {user_id}, Ticker: {ticker}, Type: {report_type}")
+        logger.info(f"File size: {len(file_content)} bytes")
+        
+        # Production code would be:
+        # command = """
+        #     INSERT INTO reports (user_id, session_id, ticker, company_name, report_type, 
+        #                         filename, file_content, file_size)
+        #     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        #     RETURNING id
+        # """
+        # result = db_manager.execute_query(command, (
+        #     user_id, session_id, ticker, company_name, report_type, 
+        #     filename, file_content, len(file_content)
+        # ))
+        # return str(result[0]['id']) if result else None
+        
+        return report_id
+        
+    except Exception as e:
+        logger.error(f"Save report to database error: {e}")
+        return None
+
+def get_user_reports(user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+    """
+    Get user's report history.
+    
+    Args:
+        user_id: User ID
+        limit: Maximum number of reports to return
+        
+    Returns:
+        List of user reports
+    """
+    try:
+        # For demo purposes, return mock data
+        # In production with proper database:
+        from datetime import datetime, timedelta
+        import uuid
+        
+        mock_reports = [
+            {
+                'report_id': str(uuid.uuid4()),
+                'ticker': 'AAPL',
+                'company_name': 'Apple Inc.',
+                'report_type': 'pdf',
+                'filename': 'AAPL_Investment_Research_20241202.pdf',
+                'file_size': 245760,
+                'created_at': (datetime.now() - timedelta(days=1)).isoformat(),
+                'expires_at': (datetime.now() + timedelta(days=4)).isoformat(),
+                'overall_score': 85.5,
+                'recommendation_action': 'BUY',
+                'model_used': 'deepseek-chat'
+            },
+            {
+                'report_id': str(uuid.uuid4()),
+                'ticker': 'TSLA',
+                'company_name': 'Tesla Inc.',
+                'report_type': 'pdf',
+                'filename': 'TSLA_Investment_Research_20241201.pdf',
+                'file_size': 198432,
+                'created_at': (datetime.now() - timedelta(days=2)).isoformat(),
+                'expires_at': (datetime.now() + timedelta(days=3)).isoformat(),
+                'overall_score': 72.3,
+                'recommendation_action': 'HOLD',
+                'model_used': 'deepseek-chat'
+            }
+        ]
+        
+        # Production code would be:
+        # query = """
+        #     SELECT report_id, ticker, company_name, report_type, filename, file_size,
+        #            created_at, expires_at, overall_score, recommendation_action, model_used
+        #     FROM user_report_history 
+        #     WHERE user_id = %s AND expires_at > CURRENT_TIMESTAMP
+        #     ORDER BY created_at DESC 
+        #     LIMIT %s
+        # """
+        # return db_manager.execute_query(query, (user_id, limit)) or []
+        
+        return mock_reports[:limit]
+        
+    except Exception as e:
+        logger.error(f"Get user reports error: {e}")
+        return []
+
+def get_report_content(report_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get report content by ID for a specific user.
+    
+    Args:
+        report_id: Report ID
+        user_id: User ID (for security)
+        
+    Returns:
+        Report data with content, or None if not found/unauthorized
+    """
+    try:
+        # For demo purposes, return mock data
+        # In production with proper database:
+        
+        logger.info(f"Fetching report {report_id} for user {user_id}")
+        
+        # Mock response (in production this would fetch from database)
+        mock_report = {
+            'report_id': report_id,
+            'filename': 'AAPL_Investment_Research_20241202.pdf',
+            'report_type': 'pdf',
+            'file_content': b'Mock PDF content here...',  # This would be actual file bytes
+            'content_type': 'application/pdf'
+        }
+        
+        # Production code would be:
+        # query = """
+        #     SELECT report_id, filename, report_type, file_content, 
+        #            CASE 
+        #                WHEN report_type = 'pdf' THEN 'application/pdf'
+        #                WHEN report_type = 'latex' THEN 'text/x-latex'
+        #                ELSE 'application/octet-stream'
+        #            END as content_type
+        #     FROM reports 
+        #     WHERE id = %s AND user_id = %s AND expires_at > CURRENT_TIMESTAMP
+        # """
+        # result = db_manager.execute_query(query, (report_id, user_id))
+        # return result[0] if result else None
+        
+        return mock_report
+        
+    except Exception as e:
+        logger.error(f"Get report content error: {e}")
+        return None
+
+def cleanup_expired_reports() -> int:
+    """
+    Clean up reports that have expired (older than 5 days).
+    
+    Returns:
+        Number of reports deleted
+    """
+    try:
+        # For demo purposes, return mock count
+        # In production with proper database:
+        
+        logger.info("Running cleanup of expired reports...")
+        
+        # Production code would be:
+        # result = db_manager.execute_query("SELECT cleanup_expired_reports()")
+        # deleted_count = result[0]['cleanup_expired_reports'] if result else 0
+        
+        deleted_count = 0  # Mock count
+        logger.info(f"Cleaned up {deleted_count} expired reports")
+        return deleted_count
+        
+    except Exception as e:
+        logger.error(f"Cleanup expired reports error: {e}")
+        return 0
+
+def delete_user_report(report_id: str, user_id: str) -> bool:
+    """
+    Delete a specific report for a user.
+    
+    Args:
+        report_id: Report ID to delete
+        user_id: User ID (for security)
+        
+    Returns:
+        True if deleted, False if not found/unauthorized
+    """
+    try:
+        # For demo purposes, return success
+        # In production with proper database:
+        
+        logger.info(f"Deleting report {report_id} for user {user_id}")
+        
+        # Production code would be:
+        # command = "DELETE FROM reports WHERE id = %s AND user_id = %s"
+        # result = db_manager.execute_command(command, (report_id, user_id))
+        # return result > 0  # Returns True if any rows were deleted
+        
+        return True  # Mock success
+        
+    except Exception as e:
+        logger.error(f"Delete report error: {e}")
+        return False
+
+def cleanup_user_reports(user_id: str) -> int:
+    """
+    Delete all reports for a specific user.
+    
+    Args:
+        user_id: User ID
+        
+    Returns:
+        Number of reports deleted
+    """
+    try:
+        # For demo purposes, return mock count
+        # In production with proper database:
+        
+        logger.info(f"Cleaning up all reports for user {user_id}")
+        
+        # Production code would be:
+        # command = "DELETE FROM reports WHERE user_id = %s"
+        # result = db_manager.execute_command(command, (user_id,))
+        # return result  # Returns number of deleted rows
+        
+        deleted_count = 3  # Mock count
+        logger.info(f"Cleaned up {deleted_count} reports for user {user_id}")
+        return deleted_count
+        
+    except Exception as e:
+        logger.error(f"Cleanup user reports error: {e}")
+        return 0
 
 def get_user_analysis_history(user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
     """Get user's analysis history."""

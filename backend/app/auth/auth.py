@@ -19,6 +19,8 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+print(f"DEBUG: JWT SECRET_KEY loaded: {SECRET_KEY[:10]}...{SECRET_KEY[-10:] if len(SECRET_KEY) > 20 else SECRET_KEY}")
+
 # Security scheme
 security = HTTPBearer()
 
@@ -60,8 +62,11 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
     """Get current authenticated user."""
     token = credentials.credentials
+    print(f"DEBUG: Received token: {token[:20]}...{token[-20:] if len(token) > 40 else token}")
     payload = verify_token(token)
+    print(f"DEBUG: Token payload: {payload}")
     if payload is None:
+        print("DEBUG: Token verification failed")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",

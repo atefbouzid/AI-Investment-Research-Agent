@@ -3,17 +3,14 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import Layout from '@/components/Layout'
-import { Brain, Globe, Save, CheckCircle, XCircle } from 'lucide-react'
+import { Globe, Save, CheckCircle, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface ModelsInfo {
-  local_llm: {
-    available: boolean
-    models: string[]
-  }
   api: {
     available: boolean
     model: string | null
+    status: string
   }
 }
 
@@ -89,7 +86,7 @@ export default function SettingsPage() {
                     <p className="text-sm text-neutral-600">Professional-grade analysis powered by OpenRouter API</p>
                   </div>
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
-                    OpenRouter
+                    API Only
                   </span>
                 </div>
               </div>
@@ -183,33 +180,14 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* AI Models Status */}
+                  {/* AI Analysis Engine Status */}
                   <div>
-                    <h3 className="text-sm font-medium text-neutral-900 mb-3">AI Models</h3>
+                    <h3 className="text-sm font-medium text-neutral-900 mb-3">AI Analysis Engine</h3>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center">
-                          <Brain className="h-4 w-4 text-neutral-500 mr-2" />
-                          <span className="text-sm text-neutral-700">Local LLM</span>
-                        </div>
-                        <div className="flex items-center">
-                          {modelsInfo?.local_llm.available ? (
-                            <CheckCircle className="h-4 w-4 text-success-600" />
-                          ) : (
-                            <XCircle className="h-4 w-4 text-danger-600" />
-                          )}
-                          <span className={`ml-2 text-sm ${
-                            modelsInfo?.local_llm.available ? 'text-success-600' : 'text-danger-600'
-                          }`}>
-                            {modelsInfo?.local_llm.available ? 'Available' : 'Unavailable'}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
                           <Globe className="h-4 w-4 text-neutral-500 mr-2" />
-                          <span className="text-sm text-neutral-700">API Access</span>
+                          <span className="text-sm text-neutral-700">OpenRouter API</span>
                         </div>
                         <div className="flex items-center">
                           {modelsInfo?.api.available ? (
@@ -220,10 +198,19 @@ export default function SettingsPage() {
                           <span className={`ml-2 text-sm ${
                             modelsInfo?.api.available ? 'text-success-600' : 'text-danger-600'
                           }`}>
-                            {modelsInfo?.api.available ? 'Available' : 'Unavailable'}
+                            {modelsInfo?.api.available ? 'Connected' : 'Disconnected'}
                           </span>
                         </div>
                       </div>
+                      
+                      {modelsInfo?.api.status && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-neutral-600">Status</span>
+                          <span className="text-sm font-medium text-neutral-900 capitalize">
+                            {modelsInfo.api.status.replace('_', ' ')}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 

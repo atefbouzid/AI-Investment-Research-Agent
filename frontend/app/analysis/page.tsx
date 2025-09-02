@@ -79,7 +79,12 @@ export default function AnalysisPage() {
       const filename = result.report_path.split('/').pop() || result.report_path
       console.log('Downloading report:', filename)
       
-      const response = await fetch(`http://localhost:8000/download/${filename}`, {
+      // Check if it's the new format (starts with /reports/) or old format
+      const downloadUrl = result.report_path.startsWith('/reports/') 
+        ? `http://localhost:8000${result.report_path}`
+        : `http://localhost:8000/download/${filename}`
+      
+      const response = await fetch(downloadUrl, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -88,9 +93,22 @@ export default function AnalysisPage() {
       if (response.ok) {
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)
+        
+        // Get filename from Content-Disposition header for new format
+        let downloadFilename = filename
+        if (result.report_path.startsWith('/reports/')) {
+          const contentDisposition = response.headers.get('Content-Disposition')
+          if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/)
+            if (filenameMatch) {
+              downloadFilename = filenameMatch[1]
+            }
+          }
+        }
+        
         const a = document.createElement('a')
         a.href = url
-        a.download = filename
+        a.download = downloadFilename
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)

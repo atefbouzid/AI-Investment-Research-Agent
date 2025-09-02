@@ -1,7 +1,7 @@
 """
 LLM Analysis Agent for Investment Research
 Takes clean data and generates comprehensive investment insights using AI
-Supports BOTH local models and API calls with smart fallback
+Uses API-based models for analysis
 """
 
 import json
@@ -14,42 +14,22 @@ class InvestmentAnalysisAgent:
     """
     AI-powered investment analysis agent.
     
-    Supports flexible AI backends:
-    - Local models (100% free, private)
-    - API calls (OpenAI, OpenRouter, DeepSeek)
-    - Smart fallback between them
+    Uses API-based models for generating investment insights and analysis.
     """
     
-    def __init__(self, use_local_llm: bool = False):
+    def __init__(self):
         """
-        Simple initialization: Local LLM or DeepSeek API.
-        
-        Args:
-            use_local_llm: True = local models, False = DeepSeek API
+        Initialize the investment analysis agent with API backend.
         """
-        self.use_local_llm = False  # Always use OpenRouter API
         self.api_key = os.getenv('OPENROUTER_API_KEY')
         self.backend = None
-        self.local_llm = None
         
-        # Setup AI backend
-        if use_local_llm:
-            self._setup_local_llm()
-        else:
-            self._setup_api()
+        # Setup API backend
+        self._setup_api()
         
         print(f"Investment Agent ready: {self.backend}")
 
-    def _setup_local_llm(self):
-        """Setup local LLM if possible, fallback to API."""
-        try:
-            from .local_llm_handler import LocalLLMHandler
-            self.local_llm = LocalLLMHandler()
-            self.local_llm.load_model(use_quantization=True)
-            self.backend = "local_llm"
-        except:
-            self._setup_api()
-        
+
     def _setup_api(self):
         """Setup DeepSeek API."""
         if self.api_key:
@@ -68,7 +48,7 @@ class InvestmentAnalysisAgent:
             AI response text
         """
         if not self.api_key:
-            return "❌ No API key"
+            return "ERROR: No API key available"
         
         try:
             headers = {
@@ -103,22 +83,14 @@ class InvestmentAnalysisAgent:
     
     def _get_model_name(self) -> str:
         """Get the actual model name being used."""
-        if self.backend == "local_llm" and self.local_llm:
-            # Get model name from local LLM handler
-            if hasattr(self.local_llm, 'current_model_name'):
-                return self.local_llm.current_model_name
-            elif hasattr(self.local_llm, 'model_name'):
-                return self.local_llm.model_name
-            else:
-                return "Local LLM (Unknown Model)"
-        elif self.backend == "deepseek_api":
+        if self.backend == "deepseek_api":
             return "deepseek-chat"
         else:
             return "No Model"
     
     def generate_analysis(self, prompt: str) -> str:
         """
-        Generate investment analysis using available AI backend.
+        Generate investment analysis using API backend.
         
         Args:
             prompt: Analysis question
@@ -126,12 +98,10 @@ class InvestmentAnalysisAgent:
         Returns:
             Analysis response
         """
-        if self.backend == "local_llm":
-            return self.local_llm.generate_text(prompt)
-        elif self.backend == "deepseek_api":
+        if self.backend == "deepseek_api":
             return self._call_api(prompt)
         else:
-            return "❌ No AI backend available"
+            return "ERROR: No AI backend available"
         
     def analyze_investment(self, clean_data: Dict) -> Dict:
         """
@@ -146,7 +116,7 @@ class InvestmentAnalysisAgent:
         ticker = clean_data.get('ticker', 'UNKNOWN')
         company_name = clean_data.get('company_name', 'Unknown Company')
         
-        print(f"🎯 Analyzing {company_name} ({ticker}) with {self.backend}")
+        print(f"INFO: Analyzing {company_name} ({ticker}) using {self.backend}")
         
         # Generate different analysis sections
         analysis = {
@@ -548,11 +518,11 @@ class InvestmentAnalysisAgent:
 
     def _show_analysis_summary(self, analysis: Dict):
         """Show summary of generated analysis."""
-        print(f"\n🎯 LLM ANALYSIS COMPLETE:")
-        print(f"✅ Company: {analysis.get('company_name')} ({analysis.get('ticker')})")
-        print(f"🤖 Backend: {analysis.get('model_used')}")
-        print(f"📊 Overall Score: {analysis.get('overall_score', 0):.1f}/100")
-        print(f"🎯 Recommendation: {analysis.get('recommendation', {}).get('action', 'HOLD')}")
-        print(f"💰 Price Target: ${analysis.get('recommendation', {}).get('price_target', 0):.2f}")
-        print(f"📈 Upside Potential: {analysis.get('recommendation', {}).get('upside_potential', 0):.1f}%")
-        print(f"✅ Ready for LaTeX report generation!")
+        print(f"\nINFO: LLM Analysis completed")
+        print(f"Company: {analysis.get('company_name')} ({analysis.get('ticker')})")
+        print(f"Backend: {analysis.get('model_used')}")
+        print(f"Overall Score: {analysis.get('overall_score', 0):.1f}/100")
+        print(f"Recommendation: {analysis.get('recommendation', {}).get('action', 'HOLD')}")
+        print(f"Price Target: ${analysis.get('recommendation', {}).get('price_target', 0):.2f}")
+        print(f"Upside Potential: {analysis.get('recommendation', {}).get('upside_potential', 0):.1f}%")
+        print(f"INFO: Ready for report generation")

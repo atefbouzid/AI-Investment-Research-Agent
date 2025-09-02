@@ -25,7 +25,7 @@ class LaTeXReportGenerator:
     - Risk assessment sections
     """
     
-    def __init__(self, output_dir: str = "backend/reports"):
+    def __init__(self, output_dir: str = "./reports"):
         """
         Initialize the LaTeX report generator.
         
@@ -702,18 +702,18 @@ Model Used & {model_used} \\\\
             os.chdir(original_cwd)
             return None
         except FileNotFoundError:
-            print(f"⚠️  pdflatex not found. Install LaTeX distribution (e.g., MiKTeX, TeX Live)")
+            print(f"WARNING: pdflatex not found. Install LaTeX distribution (e.g., MiKTeX, TeX Live)")
             print(f"   LaTeX source file saved: {tex_file}")
             os.chdir(original_cwd)
             return None
         except Exception as e:
-            print(f"⚠️  Error during PDF compilation: {e}")
+            print(f"WARNING: Error during PDF compilation: {e}")
             os.chdir(original_cwd)
             return None
     
     def inspect_sections(self, analysis_data: Dict) -> None:
         """Inspect each section's input data and LaTeX output."""
-        print("\n🔍 LATEX SECTION INSPECTOR")
+        print("\nINFO: LaTeX Section Inspector")
         print("=" * 80)
         
         sections = [
@@ -729,12 +729,12 @@ Model Used & {model_used} \\\\
         
         for section_name, data_key, section_method in sections:
             print(f"\n{'='*60}")
-            print(f"📄 SECTION: {section_name}")
+            print(f"SECTION: {section_name}")
             print(f"{'='*60}")
             
             # Show input data
             if data_key in analysis_data:
-                print(f"\n📊 INPUT DATA ({data_key}):")
+                print(f"\nINPUT DATA ({data_key}):")
                 print("-" * 40)
                 section_data = analysis_data[data_key]
                 for key, value in section_data.items():
@@ -749,10 +749,10 @@ Model Used & {model_used} \\\\
                     else:
                         print(f"  {key}: {value}")
             else:
-                print(f"\n📊 INPUT DATA: Using default values (no {data_key} in analysis)")
+                print(f"\nINPUT DATA: Using default values (no {data_key} in analysis)")
             
             # Show LaTeX output
-            print(f"\n📄 GENERATED LATEX:")
+            print(f"\nGENERATED LATEX:")
             print("-" * 40)
             try:
                 latex_output = section_method(analysis_data)
@@ -767,10 +767,10 @@ Model Used & {model_used} \\\\
                 filename = f"debug_{data_key}.tex"
                 with open(filename, 'w', encoding='utf-8') as f:
                     f.write(latex_output)
-                print(f"💾 Full output saved to: {filename}")
+                print(f"INFO: Full output saved to: {filename}")
                 
             except Exception as e:
-                print(f"❌ Error generating section: {e}")
+                print(f"ERROR: Error generating section: {e}")
                 import traceback
                 traceback.print_exc()
     

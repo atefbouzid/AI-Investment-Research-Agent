@@ -102,7 +102,7 @@ class InvestmentDataCleaner:
             self.cleaning_log.append(f"No basic info available for {ticker}")
             return self._get_empty_basic()
         
-        print(f"🏢 Cleaning basic company info...")
+        print(f"INFO: Cleaning basic company info...")
         
         clean_basic = {
             'ticker': ticker,
@@ -127,7 +127,7 @@ class InvestmentDataCleaner:
             'website': raw_basic.get('company_website', 'N/A')
         }
         
-        self.cleaning_log.append(f"✅ Basic info cleaned: {clean_basic['company_name']} ({clean_basic['sector']})")
+        self.cleaning_log.append(f"INFO: Basic info cleaned: {clean_basic['company_name']} ({clean_basic['sector']})")
         return clean_basic
     
     def _clean_financial_data(self, raw_financial: Optional[Dict], ticker: str) -> Dict:
@@ -136,7 +136,7 @@ class InvestmentDataCleaner:
             self.cleaning_log.append(f"No financial data available for {ticker}")
             return self._get_empty_financial()
         
-        print(f"📊 Cleaning financial data...")
+        print(f"INFO: Cleaning financial data...")
         
         # Extract base metrics
         current_price = self._safe_float(raw_financial.get('current_price'))
@@ -167,7 +167,7 @@ class InvestmentDataCleaner:
             'price_strength': self._assess_price_strength(current_price, month_high, month_low)
         }
         
-        self.cleaning_log.append(f"✅ Financial data cleaned: Price ${current_price:.2f}, Vol {volatility:.1f}%")
+        self.cleaning_log.append(f"INFO: Financial data cleaned: Price ${current_price:.2f}, Vol {volatility:.1f}%")
         return clean_financial
     
     def _clean_news_data(self, raw_news: Optional[Dict], ticker: str) -> Dict:
@@ -176,7 +176,7 @@ class InvestmentDataCleaner:
             self.cleaning_log.append(f"No news data available for {ticker}")
             return self._get_empty_news()
         
-        print(f"📰 Cleaning news data...")
+        print(f"INFO: Cleaning news data...")
         
         articles = raw_news.get('articles', [])
         
@@ -217,7 +217,7 @@ class InvestmentDataCleaner:
             'media_attention_score': self._calculate_media_attention_score(len(processed_articles), avg_relevance)
         }
         
-        self.cleaning_log.append(f"✅ News data cleaned: {len(processed_articles)} articles, avg relevance {avg_relevance:.2f}")
+        self.cleaning_log.append(f"INFO: News data cleaned: {len(processed_articles)} articles, avg relevance {avg_relevance:.2f}")
         return clean_news
     
     def _clean_peer_data(self, raw_peers: Optional[Dict], ticker: str) -> Dict:
@@ -226,7 +226,7 @@ class InvestmentDataCleaner:
             self.cleaning_log.append(f"No peer data available for {ticker}")
             return self._get_empty_peers()
         
-        print(f"🏢 Cleaning peer comparison data...")
+        print(f"INFO: Cleaning peer comparison data...")
         
         sector = raw_peers.get('sector', 'Unknown')
         peer_companies = raw_peers.get('peer_companies', [])
@@ -265,7 +265,7 @@ class InvestmentDataCleaner:
             'financial_strength_vs_peers': competitive_scores['financial_strength']
         }
         
-        self.cleaning_log.append(f"✅ Peer data cleaned: {len(clean_peers_list)} peers in {sector}")
+        self.cleaning_log.append(f"INFO: Peer data cleaned: {len(clean_peers_list)} peers in {sector}")
         return clean_peers
     
     def _create_analysis_features(self, basic: Dict, financial: Dict, news: Dict, peers: Dict) -> Dict:
@@ -485,12 +485,12 @@ class InvestmentDataCleaner:
         scores = clean_dataset.get('investment_scores', {})
         quality = clean_dataset.get('data_quality', {})
         
-        print(f"\n🎯 DATA CLEANING COMPLETE:")
-        print(f"✅ Company: {clean_dataset.get('company_name')}")
-        print(f"📊 Overall Score: {scores.get('overall_investment_score', 0):.1f}/100 ({scores.get('overall_grade', 'N/A')})")
-        print(f"🎯 Recommendation: {scores.get('recommendation', 'UNKNOWN')}")
-        print(f"🔧 Data Quality: {sum(quality.values())}/{len(quality)} sources clean")
-        print(f"✅ Ready for LLM analysis and report generation!")
+        print(f"\nINFO: Data cleaning completed")
+        print(f"Company: {clean_dataset.get('company_name')}")
+        print(f"Overall Score: {scores.get('overall_investment_score', 0):.1f}/100 ({scores.get('overall_grade', 'N/A')})")
+        print(f"Recommendation: {scores.get('recommendation', 'UNKNOWN')}")
+        print(f"Data Quality: {sum(quality.values())}/{len(quality)} sources clean")
+        print(f"INFO: Ready for LLM analysis and report generation")
     
     # Missing helper methods implementation
     def _standardize_sector(self, sector):
