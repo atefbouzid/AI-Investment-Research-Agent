@@ -28,7 +28,8 @@ export default function ReportsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [viewingReport, setViewingReport] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
-  const [showCleanupConfirm, setShowCleanupConfirm] = useState(false)
+  const [selectedReports, setSelectedReports] = useState<Set<string>>(new Set())
+  const [showDeleteSelectedConfirm, setShowDeleteSelectedConfirm] = useState(false)
 
   useEffect(() => {
     if (token) {
@@ -101,31 +102,57 @@ export default function ReportsPage() {
     }
   }
 
-  const downloadReport = async (reportId: string, filename: string) => {
+  const downloadReport = async (reportId: string, filename: string, format: 'pdf' | 'latex' = 'pdf') => {
+    console.log('DEBUG: Download request:', { reportId, filename, format })
+    console.log('DEBUG: Token available:', !!token)
+    
     try {
-      const response = await fetch(`http://localhost:8000/reports/${reportId}/download`, {
+      const url = `http://localhost:8000/reports/${reportId}/download?format=${format}`
+      console.log('DEBUG: Download URL:', url)
+      
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       })
 
+      console.log('DEBUG: Download response status:', response.status)
+      console.log('DEBUG: Download response headers:', Object.fromEntries(response.headers.entries()))
+
       if (response.ok) {
         const blob = await response.blob()
+        console.log('DEBUG: Blob size:', blob.size, 'type:', blob.type)
+        
+        // Get filename from Content-Disposition header
+        let downloadFilename = filename
+        const contentDisposition = response.headers.get('Content-Disposition')
+        console.log('DEBUG: Content-Disposition:', contentDisposition)
+        
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="([^"]+)"/)
+          if (filenameMatch) {
+            downloadFilename = filenameMatch[1]
+            console.log('DEBUG: Extracted filename:', downloadFilename)
+          }
+        }
+        
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = filename
+        a.download = downloadFilename
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
-        toast.success('Report downloaded successfully!')
+        toast.success(`${format.toUpperCase()} downloaded successfully!`)
       } else {
-        toast.error('Failed to download report')
+        const errorText = await response.text()
+        console.error('DEBUG: Download error response:', response.status, errorText)
+        toast.error(`Failed to download ${format.toUpperCase()}: ${response.status}`)
       }
     } catch (error) {
       console.error('Download error:', error)
-      toast.error('Failed to download report')
+      toast.error(`Failed to download ${format.toUpperCase()}: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -173,26 +200,66 @@ export default function ReportsPage() {
     }
   }
 
-  const cleanupAllReports = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/reports/cleanup', {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      })
+  // Selection management functions
+  const toggleReportSelection = (reportId: string) => {
+    const newSelected = new Set(selectedReports)
+    if (newSelected.has(reportId)) {
+      newSelected.delete(reportId)
+    } else {
+      newSelected.add(reportId)
+    }
+    setSelectedReports(newSelected)
+  }
 
-      if (response.ok) {
-        const data = await response.json()
-        toast.success(`Successfully deleted ${data.deleted_count} reports`)
-        setReports([])
-        setShowCleanupConfirm(false)
-      } else {
-        toast.error('Failed to cleanup reports')
+  const toggleSelectAll = () => {
+    if (selectedReports.size === filteredReports.length) {
+      // If all are selected, unselect all
+      setSelectedReports(new Set())
+    } else {
+      // Select all filtered reports
+      setSelectedReports(new Set(filteredReports.map(report => report.report_id)))
+    }
+  }
+
+  const deleteSelectedReports = async () => {
+    if (selectedReports.size === 0) {
+      toast.error('No reports selected')
+      return
+    }
+
+    try {
+      let deletedCount = 0
+      const totalSelected = selectedReports.size
+
+      for (const reportId of Array.from(selectedReports)) {
+        const response = await fetch(`http://localhost:8000/reports/${reportId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          deletedCount++
+        } else {
+          console.error(`Failed to delete report ${reportId}`)
+        }
       }
+
+      if (deletedCount > 0) {
+        toast.success(`Successfully deleted ${deletedCount} of ${totalSelected} reports`)
+        // Refresh the reports list
+        await fetchReports()
+        // Clear selection
+        setSelectedReports(new Set())
+      } else {
+        toast.error('Failed to delete any reports')
+      }
+
+      setShowDeleteSelectedConfirm(false)
     } catch (error) {
-      console.error('Cleanup error:', error)
-      toast.error('Failed to cleanup reports')
+      console.error('Delete selected error:', error)
+      toast.error('Failed to delete selected reports')
     }
   }
 
@@ -218,13 +285,31 @@ export default function ReportsPage() {
             </Link>
             
             {reports.length > 0 && (
-              <button
-                onClick={() => setShowCleanupConfirm(true)}
-                className="flex items-center px-4 py-2 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Cleanup All
-              </button>
+              <div className="flex items-center space-x-3">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedReports.size === filteredReports.length && filteredReports.length > 0}
+                    onChange={toggleSelectAll}
+                    className="mr-2 text-primary-600 focus:ring-primary-500"
+                    aria-label="Select all reports"
+                    title="Select or deselect all reports"
+                  />
+                  <span className="text-sm text-neutral-600">
+                    Select All ({selectedReports.size} of {filteredReports.length})
+                  </span>
+                </label>
+                
+                {selectedReports.size > 0 && (
+                  <button
+                    onClick={() => setShowDeleteSelectedConfirm(true)}
+                    className="flex items-center px-4 py-2 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Selected ({selectedReports.size})
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -252,9 +337,17 @@ export default function ReportsPage() {
         {!isLoading && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredReports.map((report) => (
-              <div key={report.report_id} className="bg-white rounded-xl border border-neutral-200 p-6 hover:shadow-md transition-shadow">
+              <div key={report.report_id} className={`bg-white rounded-xl border transition-all ${selectedReports.has(report.report_id) ? 'border-primary-300 ring-2 ring-primary-100' : 'border-neutral-200'} p-6 hover:shadow-md`}>
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedReports.has(report.report_id)}
+                      onChange={() => toggleReportSelection(report.report_id)}
+                      className="mr-3 text-primary-600 focus:ring-primary-500"
+                      aria-label={`Select ${report.ticker} report`}
+                      title={`Select ${report.ticker} report for deletion`}
+                    />
                     <FileText className="h-8 w-8 text-primary-600" />
                     <div className="ml-3">
                       <h3 className="text-lg font-semibold text-neutral-900">{report.ticker}</h3>
@@ -299,16 +392,26 @@ export default function ReportsPage() {
                       View
                     </button>
                     <button 
-                      title="Download Report"
-                      onClick={() => downloadReport(report.report_id, report.filename)}
+                      title="Download PDF"
+                      onClick={() => downloadReport(report.report_id, report.filename, 'pdf')}
                       className="flex-1 flex items-center justify-center px-3 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors"
                     >
                       <Download className="h-4 w-4 mr-1" />
-                      Download
+                      PDF
+                    </button>
+                    <button 
+                      title="Download LaTeX"
+                      onClick={() => downloadReport(report.report_id, report.filename, 'latex')}
+                      className="flex-1 flex items-center justify-center px-3 py-2 text-sm font-medium text-neutral-600 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors"
+                    >
+                      <Download className="h-4 w-4 mr-1" />
+                      LaTeX
                     </button>
                     <button 
                       onClick={() => setShowDeleteConfirm(report.report_id)}
                       className="flex items-center justify-center px-3 py-2 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                      title={`Delete ${report.ticker} report`}
+                      aria-label={`Delete ${report.ticker} report`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -396,29 +499,29 @@ export default function ReportsPage() {
           </div>
         )}
 
-        {/* Cleanup Confirmation Modal */}
-        {showCleanupConfirm && (
+        {/* Delete Selected Confirmation Modal */}
+        {showDeleteSelectedConfirm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-md w-full p-6">
               <div className="flex items-center mb-4">
                 <AlertTriangle className="h-6 w-6 text-red-600 mr-3" />
-                <h3 className="text-lg font-semibold text-neutral-900">Cleanup All Reports</h3>
+                <h3 className="text-lg font-semibold text-neutral-900">Delete Selected Reports</h3>
               </div>
               <p className="text-neutral-600 mb-6">
-                Are you sure you want to delete <strong>ALL</strong> your reports? This will permanently remove all your investment analysis reports and free up database space. This action cannot be undone.
+                Are you sure you want to delete <strong>{selectedReports.size}</strong> selected report{selectedReports.size !== 1 ? 's' : ''}? This will permanently remove {selectedReports.size === 1 ? 'this report' : 'these reports'} from your account. This action cannot be undone.
               </p>
               <div className="flex space-x-3">
                 <button
-                  onClick={() => setShowCleanupConfirm(false)}
+                  onClick={() => setShowDeleteSelectedConfirm(false)}
                   className="flex-1 px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={cleanupAllReports}
+                  onClick={deleteSelectedReports}
                   className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
                 >
-                  Delete All Reports
+                  Delete {selectedReports.size} Report{selectedReports.size !== 1 ? 's' : ''}
                 </button>
               </div>
             </div>

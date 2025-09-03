@@ -56,10 +56,9 @@ npm run dev
 - **Backend API**: http://localhost:8000
 - **API Documentation**: http://localhost:8000/docs
 
-## Demo Credentials
+## Getting Started
 
-- **Username**: admin
-- **Password**: admin
+Create an account using the registration form, or login with your existing credentials.
 
 ## Project Structure
 
@@ -86,7 +85,7 @@ AI-Investment-Research-Agent-Full-Stack-ML-Platform/
 
 ## Usage
 
-1. **Login**: Use admin/admin to access the platform
+1. **Login**: Create an account or use your existing credentials
 2. **Analysis**: Enter a stock ticker (e.g., AAPL, TSLA) in the Analysis page
 3. **Reports**: View and download generated PDF reports
 4. **Dashboard**: Monitor your analysis history and statistics

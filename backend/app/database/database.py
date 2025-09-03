@@ -9,10 +9,22 @@ from psycopg2.pool import SimpleConnectionPool
 from contextlib import contextmanager
 from typing import Optional, Dict, Any, List
 import logging
+from passlib.context import CryptContext
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Password hashing context
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash."""
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password: str) -> str:
+    """Hash a password."""
+    return pwd_context.hash(password)
 
 class DatabaseManager:
     """Database connection manager for PostgreSQL."""
@@ -32,7 +44,10 @@ class DatabaseManager:
                 'user': os.getenv('DB_USER', 'postgres'),
                 'password': os.getenv('DB_PASSWORD', 'admin'),
                 'minconn': 1,
-                'maxconn': 10
+                'maxconn': 10,
+                # Connection timeout settings
+                'connect_timeout': 30,  # 30 seconds to establish connection
+                'application_name': 'InvestAI_Backend'
             }
             
             self.pool = SimpleConnectionPool(**db_config)
@@ -102,8 +117,12 @@ db_manager = DatabaseManager()
 def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
     """Authenticate user with username and password."""
     try:
-        # For demo purposes, using simple admin/admin authentication
-        # In production, this should use proper password hashing and database lookup
+        # Try database authentication first
+        user = authenticate_user_db(username, password)
+        if user:
+            return user
+        
+        # Fallback to demo admin account if database authentication fails
         if username == 'admin' and password == 'admin':
             return {
                 'id': '00000000-0000-0000-0000-000000000001',
@@ -112,16 +131,6 @@ def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
                 'role': 'admin',
                 'is_active': True
             }
-        
-        # In production, use the database authentication:
-        # query = """
-        #     SELECT id, username, email, role, is_active 
-        #     FROM users 
-        #     WHERE username = %s AND is_active = true
-        # """
-        # result = db_manager.execute_query(query, (username,))
-        # if result and verify_password(password, result[0]['password_hash']):
-        #     return result[0]
         
         return None
     except Exception as e:
@@ -140,121 +149,202 @@ def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
         logger.error(f"Get user error: {e}")
         return None
 
-# Analysis session functions
-def create_analysis_session(user_id: str, ticker: str) -> Optional[str]:
-    """Create a new analysis session."""
+def check_username_exists(username: str) -> bool:
+    """Check if username already exists."""
     try:
-        # For demo purposes, return a mock session ID
-        # In production, this would insert into the database when DB is properly set up
-        import uuid
-        session_id = str(uuid.uuid4())
-        logger.info(f"Created analysis session {session_id} for user {user_id}, ticker {ticker}")
-        return session_id
-        
-        # Production code (when database is set up):
-        # command = """
-        #     INSERT INTO analysis_sessions (user_id, ticker)
-        #     VALUES (%s, %s)
-        #     RETURNING id
-        # """
-        # with db_manager.get_connection() as conn:
-        #     with conn.cursor() as cursor:
-        #         cursor.execute(command, (user_id, ticker.upper()))
-        #         session_id = cursor.fetchone()[0]
-        #         conn.commit()
-        #         return str(session_id)
+        result = db_manager.execute_query(
+            "SELECT id FROM users WHERE username = %s",
+            (username,)
+        )
+        return len(result) > 0
     except Exception as e:
-        logger.error(f"Create session error: {e}")
+        logger.error(f"Check username exists error: {e}")
+        return True  # Return True to be safe
+
+def check_email_exists(email: str) -> bool:
+    """Check if email already exists."""
+    try:
+        result = db_manager.execute_query(
+            "SELECT id FROM users WHERE email = %s",
+            (email,)
+        )
+        return len(result) > 0
+    except Exception as e:
+        logger.error(f"Check email exists error: {e}")
+        return True  # Return True to be safe
+
+def create_user(username: str, email: str, password: str, role: str = 'user') -> Optional[Dict[str, Any]]:
+    """
+    Create a new user account.
+    
+    Args:
+        username: Unique username
+        email: User email address
+        password: Plain text password (will be hashed)
+        role: User role (default: 'user')
+        
+    Returns:
+        User data if successful, None otherwise
+    """
+    try:
+        # Hash the password
+        password_hash = get_password_hash(password)
+        
+        # Insert new user
+        command = """
+            INSERT INTO users (username, email, password_hash, role, is_active)
+            VALUES (%s, %s, %s, %s, true)
+            RETURNING id, username, email, role, is_active, created_at
+        """
+        
+        with db_manager.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(command, (username, email, password_hash, role))
+                result = cursor.fetchone()
+                conn.commit()
+                
+                if result:
+                    user_data = dict(result)
+                    logger.info(f"Created new user: {username} with ID: {user_data['id']}")
+                    return user_data
+                else:
+                    return None
+                    
+    except Exception as e:
+        logger.error(f"Create user error: {e}")
         return None
 
-def update_analysis_session(session_id: str, status: str, company_name: str = None, error_message: str = None):
-    """Update analysis session status."""
+def authenticate_user_db(username: str, password: str) -> Optional[Dict[str, Any]]:
+    """Authenticate user against database with proper password verification."""
     try:
-        if status == 'completed':
-            command = """
-                UPDATE analysis_sessions 
-                SET analysis_status = %s, company_name = %s, completed_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-            """
-            db_manager.execute_command(command, (status, company_name, session_id))
-        else:
-            command = """
-                UPDATE analysis_sessions 
-                SET analysis_status = %s, company_name = %s, error_message = %s
-                WHERE id = %s
-            """
-            db_manager.execute_command(command, (status, company_name, error_message, session_id))
+        query = """
+            SELECT id, username, email, role, is_active, password_hash
+            FROM users 
+            WHERE username = %s AND is_active = true
+        """
+        result = db_manager.execute_query(query, (username,))
+        
+        if result and verify_password(password, result[0]['password_hash']):
+            # Remove password_hash from result before returning
+            user_data = dict(result[0])
+            del user_data['password_hash']
+            return user_data
+        
+        return None
     except Exception as e:
-        logger.error(f"Update session error: {e}")
+        logger.error(f"Database authentication error: {e}")
+        return None
 
-def save_analysis_result(session_id: str, analysis_data: Dict[str, Any], report_path: str = None):
-    """Save analysis results."""
+# Report management functions using optimized schema
+def create_report(user_id: str, ticker: str, company_name: str, filename: str) -> Optional[str]:
+    """Create a new report in the database."""
     try:
         command = """
-            INSERT INTO analysis_results (session_id, overall_score, recommendation_action, 
-                                        recommendation_confidence, model_used, analysis_data, report_path)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO reports (user_id, ticker, company_name, filename, analysis_status)
+            VALUES (%s, %s, %s, %s, 'processing')
+            RETURNING id
         """
+        with db_manager.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(command, (user_id, ticker.upper(), company_name, filename))
+                report_id = cursor.fetchone()[0]
+                conn.commit()
+                logger.info(f"Created report {report_id} for user {user_id}, ticker {ticker}")
+                return str(report_id)
+    except Exception as e:
+        logger.error(f"Create report error: {e}")
+        return None
+
+def update_report_status(report_id: str, status: str, error_message: str = None):
+    """Update report status."""
+    try:
+        if error_message:
+            command = """
+                UPDATE reports 
+                SET analysis_status = %s, error_message = %s
+                WHERE id = %s
+            """
+            db_manager.execute_command(command, (status, error_message, report_id))
+        else:
+            command = """
+                UPDATE reports 
+                SET analysis_status = %s, error_message = NULL
+                WHERE id = %s
+            """
+            db_manager.execute_command(command, (status, report_id))
+        logger.info(f"Updated report {report_id} status to {status}")
+    except Exception as e:
+        logger.error(f"Update report status error: {e}")
+
+def save_analysis_results_to_report(report_id: str, analysis_data: Dict[str, Any]):
+    """Save analysis results to report."""
+    try:
+        # Extract key fields from analysis data
+        company_name = analysis_data.get('company_name', '')
         overall_score = analysis_data.get('overall_score', 0)
         recommendation = analysis_data.get('recommendation', {})
         recommendation_action = recommendation.get('action', 'HOLD')
         recommendation_confidence = recommendation.get('confidence', 0)
         model_used = analysis_data.get('model_used', 'unknown')
         
+        # Convert analysis_data to JSON string for JSONB storage
+        import json
+        analysis_json = json.dumps(analysis_data, default=str)
+        
+        command = """
+            UPDATE reports 
+            SET company_name = %s, overall_score = %s, recommendation_action = %s, 
+                recommendation_confidence = %s, model_used = %s, analysis_data = %s,
+                analysis_status = 'completed'
+            WHERE id = %s
+        """
+        
         db_manager.execute_command(command, (
-            session_id, overall_score, recommendation_action, 
-            recommendation_confidence, model_used, analysis_data, report_path
+            company_name, overall_score, recommendation_action, 
+            recommendation_confidence, model_used, analysis_json, report_id
         ))
+        logger.info(f"Saved analysis results to report {report_id}: {company_name}, score: {overall_score}, action: {recommendation_action}")
     except Exception as e:
-        logger.error(f"Save result error: {e}")
+        logger.error(f"Save analysis results error: {e}")
+        print(f"Analysis data keys: {list(analysis_data.keys()) if analysis_data else 'None'}")
+        print(f"Company name from analysis: {analysis_data.get('company_name', 'NOT FOUND')}")
 
-def save_report_to_database(user_id: str, session_id: str, ticker: str, company_name: str, 
-                           report_type: str, filename: str, file_content: bytes) -> Optional[str]:
+def save_report_file_content(report_id: str, file_content_pdf: bytes = None, 
+                           file_content_latex: str = None) -> bool:
     """
-    Save report file to database.
+    Save report file content to database.
     
     Args:
-        user_id: User ID who requested the report
-        session_id: Analysis session ID
-        ticker: Stock ticker
-        company_name: Company name
-        report_type: 'pdf' or 'latex'
-        filename: Original filename
-        file_content: File content as bytes
+        report_id: Report ID
+        file_content_pdf: PDF file content as bytes
+        file_content_latex: LaTeX file content as string
         
     Returns:
-        Report ID if successful, None otherwise
+        True if successful, False otherwise
     """
     try:
-        import uuid
+        file_size = 0
+        if file_content_pdf:
+            file_size = len(file_content_pdf)
+        elif file_content_latex:
+            file_size = len(file_content_latex.encode('utf-8'))
         
-        # For demo purposes, return a mock report ID
-        # In production with proper database:
-        report_id = str(uuid.uuid4())
+        command = """
+            UPDATE reports 
+            SET file_content_pdf = %s, file_content_latex = %s, file_size = %s
+            WHERE id = %s
+        """
         
-        # Store report metadata (in production this would go to the database)
-        logger.info(f"Report saved to database: {report_id}")
-        logger.info(f"User: {user_id}, Ticker: {ticker}, Type: {report_type}")
-        logger.info(f"File size: {len(file_content)} bytes")
+        db_manager.execute_command(command, (
+            file_content_pdf, file_content_latex, file_size, report_id
+        ))
         
-        # Production code would be:
-        # command = """
-        #     INSERT INTO reports (user_id, session_id, ticker, company_name, report_type, 
-        #                         filename, file_content, file_size)
-        #     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        #     RETURNING id
-        # """
-        # result = db_manager.execute_query(command, (
-        #     user_id, session_id, ticker, company_name, report_type, 
-        #     filename, file_content, len(file_content)
-        # ))
-        # return str(result[0]['id']) if result else None
-        
-        return report_id
+        logger.info(f"Saved file content to report {report_id}, size: {file_size} bytes")
+        return True
         
     except Exception as e:
-        logger.error(f"Save report to database error: {e}")
-        return None
+        logger.error(f"Save report file content error: {e}")
+        return False
 
 def get_user_reports(user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
     """
@@ -268,52 +358,16 @@ def get_user_reports(user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         List of user reports
     """
     try:
-        # For demo purposes, return mock data
-        # In production with proper database:
-        from datetime import datetime, timedelta
-        import uuid
-        
-        mock_reports = [
-            {
-                'report_id': str(uuid.uuid4()),
-                'ticker': 'AAPL',
-                'company_name': 'Apple Inc.',
-                'report_type': 'pdf',
-                'filename': 'AAPL_Investment_Research_20241202.pdf',
-                'file_size': 245760,
-                'created_at': (datetime.now() - timedelta(days=1)).isoformat(),
-                'expires_at': (datetime.now() + timedelta(days=4)).isoformat(),
-                'overall_score': 85.5,
-                'recommendation_action': 'BUY',
-                'model_used': 'deepseek-chat'
-            },
-            {
-                'report_id': str(uuid.uuid4()),
-                'ticker': 'TSLA',
-                'company_name': 'Tesla Inc.',
-                'report_type': 'pdf',
-                'filename': 'TSLA_Investment_Research_20241201.pdf',
-                'file_size': 198432,
-                'created_at': (datetime.now() - timedelta(days=2)).isoformat(),
-                'expires_at': (datetime.now() + timedelta(days=3)).isoformat(),
-                'overall_score': 72.3,
-                'recommendation_action': 'HOLD',
-                'model_used': 'deepseek-chat'
-            }
-        ]
-        
-        # Production code would be:
-        # query = """
-        #     SELECT report_id, ticker, company_name, report_type, filename, file_size,
-        #            created_at, expires_at, overall_score, recommendation_action, model_used
-        #     FROM user_report_history 
-        #     WHERE user_id = %s AND expires_at > CURRENT_TIMESTAMP
-        #     ORDER BY created_at DESC 
-        #     LIMIT %s
-        # """
-        # return db_manager.execute_query(query, (user_id, limit)) or []
-        
-        return mock_reports[:limit]
+        query = """
+            SELECT id as report_id, ticker, company_name, filename, file_size,
+                   created_at, overall_score, recommendation_action, model_used,
+                   analysis_status
+            FROM reports 
+            WHERE user_id = %s
+            ORDER BY created_at DESC 
+            LIMIT %s
+        """
+        return db_manager.execute_query(query, (user_id, limit)) or []
         
     except Exception as e:
         logger.error(f"Get user reports error: {e}")
@@ -331,63 +385,53 @@ def get_report_content(report_id: str, user_id: str) -> Optional[Dict[str, Any]]
         Report data with content, or None if not found/unauthorized
     """
     try:
-        # For demo purposes, return mock data
-        # In production with proper database:
+        query = """
+            SELECT id as report_id, filename, file_content_pdf, file_content_latex
+            FROM reports 
+            WHERE id = %s AND user_id = %s
+        """
+        result = db_manager.execute_query(query, (report_id, user_id))
         
-        logger.info(f"Fetching report {report_id} for user {user_id}")
+        if result:
+            report = result[0]
+            
+            return {
+                'report_id': report['report_id'],
+                'filename': report['filename'],
+                'file_content_pdf': report['file_content_pdf'],
+                'file_content_latex': report['file_content_latex']
+            }
         
-        # Mock response (in production this would fetch from database)
-        mock_report = {
-            'report_id': report_id,
-            'filename': 'AAPL_Investment_Research_20241202.pdf',
-            'report_type': 'pdf',
-            'file_content': b'Mock PDF content here...',  # This would be actual file bytes
-            'content_type': 'application/pdf'
-        }
-        
-        # Production code would be:
-        # query = """
-        #     SELECT report_id, filename, report_type, file_content, 
-        #            CASE 
-        #                WHEN report_type = 'pdf' THEN 'application/pdf'
-        #                WHEN report_type = 'latex' THEN 'text/x-latex'
-        #                ELSE 'application/octet-stream'
-        #            END as content_type
-        #     FROM reports 
-        #     WHERE id = %s AND user_id = %s AND expires_at > CURRENT_TIMESTAMP
-        # """
-        # result = db_manager.execute_query(query, (report_id, user_id))
-        # return result[0] if result else None
-        
-        return mock_report
+        return None
         
     except Exception as e:
         logger.error(f"Get report content error: {e}")
         return None
 
-def cleanup_expired_reports() -> int:
+def cleanup_old_reports(days_threshold: int = 5) -> int:
     """
-    Clean up reports that have expired (older than 5 days).
+    Clean up reports older than specified days.
     
+    Args:
+        days_threshold: Number of days to keep reports
+        
     Returns:
         Number of reports deleted
     """
     try:
-        # For demo purposes, return mock count
-        # In production with proper database:
+        logger.info(f"Running cleanup of reports older than {days_threshold} days...")
         
-        logger.info("Running cleanup of expired reports...")
+        command = """
+            DELETE FROM reports 
+            WHERE created_at < (CURRENT_TIMESTAMP - INTERVAL '%s days')
+        """
+        deleted_count = db_manager.execute_command(command, (days_threshold,))
         
-        # Production code would be:
-        # result = db_manager.execute_query("SELECT cleanup_expired_reports()")
-        # deleted_count = result[0]['cleanup_expired_reports'] if result else 0
-        
-        deleted_count = 0  # Mock count
-        logger.info(f"Cleaned up {deleted_count} expired reports")
+        logger.info(f"Cleaned up {deleted_count} old reports")
         return deleted_count
         
     except Exception as e:
-        logger.error(f"Cleanup expired reports error: {e}")
+        logger.error(f"Cleanup old reports error: {e}")
         return 0
 
 def delete_user_report(report_id: str, user_id: str) -> bool:
@@ -402,17 +446,15 @@ def delete_user_report(report_id: str, user_id: str) -> bool:
         True if deleted, False if not found/unauthorized
     """
     try:
-        # For demo purposes, return success
-        # In production with proper database:
+        command = "DELETE FROM reports WHERE id = %s AND user_id = %s"
+        result = db_manager.execute_command(command, (report_id, user_id))
         
-        logger.info(f"Deleting report {report_id} for user {user_id}")
-        
-        # Production code would be:
-        # command = "DELETE FROM reports WHERE id = %s AND user_id = %s"
-        # result = db_manager.execute_command(command, (report_id, user_id))
-        # return result > 0  # Returns True if any rows were deleted
-        
-        return True  # Mock success
+        if result > 0:
+            logger.info(f"Deleted report {report_id} for user {user_id}")
+            return True
+        else:
+            logger.warning(f"Report {report_id} not found or unauthorized for user {user_id}")
+            return False
         
     except Exception as e:
         logger.error(f"Delete report error: {e}")
@@ -420,7 +462,7 @@ def delete_user_report(report_id: str, user_id: str) -> bool:
 
 def cleanup_user_reports(user_id: str) -> int:
     """
-    Delete all reports for a specific user.
+    Delete all reports for a specific user, one by one.
     
     Args:
         user_id: User ID
@@ -429,55 +471,83 @@ def cleanup_user_reports(user_id: str) -> int:
         Number of reports deleted
     """
     try:
-        # For demo purposes, return mock count
-        # In production with proper database:
-        
-        logger.info(f"Cleaning up all reports for user {user_id}")
-        
-        # Production code would be:
-        # command = "DELETE FROM reports WHERE user_id = %s"
-        # result = db_manager.execute_command(command, (user_id,))
-        # return result  # Returns number of deleted rows
-        
-        deleted_count = 3  # Mock count
+        # Get all report ids for this user
+        select_query = "SELECT id FROM reports WHERE user_id = %s"
+        results = db_manager.execute_query(select_query, (user_id,))
+        report_ids = [row['id'] for row in results] if results else []
+
+        print(f"DEBUG: Found {len(report_ids)} reports for user {user_id}")
+
+        if not report_ids:
+            logger.info(f"No reports found for user {user_id}")
+            return 0
+
+        deleted_count = 0
+        for report_id in report_ids:
+            command = "DELETE FROM reports WHERE id = %s AND user_id = %s"
+            result = db_manager.execute_command(command, (report_id, user_id))
+            if result > 0:
+                deleted_count += 1
+                logger.info(f"Deleted report {report_id} for user {user_id}")
+            else:
+                logger.warning(f"Failed to delete report {report_id} for user {user_id}")
+
+        print(f"DEBUG: Deleted {deleted_count} reports for user {user_id}")
         logger.info(f"Cleaned up {deleted_count} reports for user {user_id}")
         return deleted_count
-        
+
     except Exception as e:
         logger.error(f"Cleanup user reports error: {e}")
+        print(f"DEBUG: Cleanup error: {e}")
+        import traceback
+        traceback.print_exc()
         return 0
 
 def get_user_analysis_history(user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
-    """Get user's analysis history."""
+    """Get user's analysis history from reports table."""
     try:
         query = """
             SELECT 
-                s.id, s.ticker, s.company_name, s.analysis_status, s.created_at, s.completed_at,
-                r.overall_score, r.recommendation_action, r.report_path
-            FROM analysis_sessions s
-            LEFT JOIN analysis_results r ON s.id = r.session_id
-            WHERE s.user_id = %s
-            ORDER BY s.created_at DESC
+                id, ticker, company_name, analysis_status, created_at,
+                overall_score, recommendation_action, filename
+            FROM reports
+            WHERE user_id = %s
+            ORDER BY created_at DESC
             LIMIT %s
         """
         return db_manager.execute_query(query, (user_id, limit))
     except Exception as e:
-        logger.error(f"Get history error: {e}")
+        logger.error(f"Get analysis history error: {e}")
         return []
 
-def get_analysis_details(session_id: str) -> Optional[Dict[str, Any]]:
-    """Get detailed analysis information."""
+def get_report_details(report_id: str) -> Optional[Dict[str, Any]]:
+    """Get detailed report information."""
     try:
         query = """
             SELECT 
-                s.*, r.analysis_data, r.overall_score, r.recommendation_action, 
-                r.recommendation_confidence, r.model_used, r.report_path
-            FROM analysis_sessions s
-            LEFT JOIN analysis_results r ON s.id = r.session_id
-            WHERE s.id = %s
+                id, user_id, ticker, company_name, overall_score, recommendation_action,
+                recommendation_confidence, model_used, analysis_data, filename,
+                file_size, analysis_status, created_at, error_message
+            FROM reports
+            WHERE id = %s
         """
-        result = db_manager.execute_query(query, (session_id,))
+        result = db_manager.execute_query(query, (report_id,))
         return result[0] if result else None
     except Exception as e:
-        logger.error(f"Get analysis details error: {e}")
+        logger.error(f"Get report details error: {e}")
         return None
+
+# -----------------------------------------------------------------------------
+# Compatibility helpers
+# -----------------------------------------------------------------------------
+def check_user_exists(username: str) -> bool:
+    """
+    Backward-compatible helper used by main.py.
+    Delegates to check_username_exists to verify if a user account exists.
+    """
+    try:
+        return check_username_exists(username)
+    except Exception as e:
+        logger.error(f"Check user exists error: {e}")
+        # Be conservative: report as existing to avoid leaking existence via errors
+        return True

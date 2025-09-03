@@ -17,6 +17,7 @@ interface AnalysisResult {
     analysis_timestamp: string
     model_used: string
     sections: Record<string, boolean>
+    report_id?: string
   }
   report_path?: string
 }
@@ -24,9 +25,12 @@ interface AnalysisResult {
 export default function AnalysisPage() {
   const { token } = useAuth()
   const [ticker, setTicker] = useState('')
-  const [reportFormat, setReportFormat] = useState<'pdf' | 'latex'>('pdf')
+  const [reportFormat, setReportFormat] = useState<'latex' | 'both'>('both')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [result, setResult] = useState<AnalysisResult | null>(null)
+  const [progress, setProgress] = useState(0)
+  const [currentStep, setCurrentStep] = useState('')
+  const [showProgress, setShowProgress] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,6 +42,9 @@ export default function AnalysisPage() {
 
     setIsAnalyzing(true)
     setResult(null)
+    setProgress(0)
+    setCurrentStep('Initializing analysis...')
+    setShowProgress(true)
 
     try {
       const response = await fetch('http://localhost:8000/analyze', {
@@ -48,43 +55,46 @@ export default function AnalysisPage() {
         },
         body: JSON.stringify({
           ticker: ticker.toUpperCase().trim(),
-          report_format: reportFormat,
+          report_format: reportFormat === 'both' ? 'both' : reportFormat,
         }),
       })
+
+      // Simulate progress updates while analysis is running
+      setProgress(25)
+      setCurrentStep('Processing analysis...')
 
       const data = await response.json()
 
       if (response.ok) {
+        setProgress(100)
+        setCurrentStep('Analysis completed!')
         setResult(data)
         toast.success('Analysis completed successfully!')
       } else {
-        toast.error(data.detail || 'Analysis failed')
+        throw new Error(data.detail || 'Analysis failed')
       }
+      
     } catch (error) {
       console.error('Analysis error:', error)
-      toast.error('Failed to perform analysis. Please try again.')
+      toast.error(error instanceof Error ? error.message : 'Analysis failed')
+      setCurrentStep('Analysis failed')
+      setProgress(0)
     } finally {
       setIsAnalyzing(false)
+      // Keep progress visible for a moment after completion
+      setTimeout(() => setShowProgress(false), 3000)
     }
   }
 
-  const downloadReport = async () => {
-    if (!result?.report_path) {
-      toast.error('No report path available')
+  const downloadReport = async (format: 'pdf' | 'latex' = 'pdf') => {
+    if (!result?.data?.report_id) {
+      toast.error('No report ID available')
       return
     }
 
     try {
-      // Extract filename from path
-      const filename = result.report_path.split('/').pop() || result.report_path
-      console.log('Downloading report:', filename)
-      
-      // Check if it's the new format (starts with /reports/) or old format
-      const downloadUrl = result.report_path.startsWith('/reports/') 
-        ? `http://localhost:8000${result.report_path}`
-        : `http://localhost:8000/download/${filename}`
-      
-      const response = await fetch(downloadUrl, {
+      const reportId = result.data.report_id
+      const response = await fetch(`http://localhost:8000/reports/${reportId}/download?format=${format}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -92,36 +102,34 @@ export default function AnalysisPage() {
 
       if (response.ok) {
         const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
         
-        // Get filename from Content-Disposition header for new format
-        let downloadFilename = filename
-        if (result.report_path.startsWith('/reports/')) {
-          const contentDisposition = response.headers.get('Content-Disposition')
-          if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/)
-            if (filenameMatch) {
-              downloadFilename = filenameMatch[1]
-            }
+        // Get filename from Content-Disposition header  
+        const extension = format === 'latex' ? 'tex' : format
+        let filename = `${result.data.ticker}_report.${extension}`
+        const contentDisposition = response.headers.get('Content-Disposition')
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="([^"]+)"/)
+          if (filenameMatch) {
+            filename = filenameMatch[1]
           }
         }
         
+        const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = downloadFilename
+        a.download = filename
         document.body.appendChild(a)
         a.click()
-        window.URL.revokeObjectURL(url)
         document.body.removeChild(a)
-        toast.success('Report downloaded successfully!')
+        URL.revokeObjectURL(url)
+        toast.success(`${format.toUpperCase()} downloaded successfully!`)
       } else {
         const errorText = await response.text()
-        console.error('Download failed:', response.status, errorText)
-        toast.error(`Failed to download report: ${response.status}`)
+        toast.error(`Failed to download ${format.toUpperCase()}: ${response.status}`)
       }
     } catch (error) {
       console.error('Download error:', error)
-      toast.error(`Download error: ${error}`)
+      toast.error(`Failed to download ${format.toUpperCase()}`)
     }
   }
 
@@ -184,34 +192,34 @@ export default function AnalysisPage() {
               <label className="block text-sm font-medium text-neutral-700">
                 Report Format
               </label>
-              <div className="flex space-x-4">
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="reportFormat"
-                    value="pdf"
-                    checked={reportFormat === 'pdf'}
-                    onChange={(e) => setReportFormat(e.target.value as 'pdf' | 'latex')}
-                    disabled={isAnalyzing}
-                    className="mr-2 text-primary-600 focus:ring-primary-500"
-                  />
-                  <span className="text-sm text-neutral-600">PDF (Recommended)</span>
-                </label>
+              <div className="flex flex-wrap gap-4">
                 <label className="flex items-center">
                   <input
                     type="radio"
                     name="reportFormat"
                     value="latex"
                     checked={reportFormat === 'latex'}
-                    onChange={(e) => setReportFormat(e.target.value as 'pdf' | 'latex')}
+                    onChange={(e) => setReportFormat(e.target.value as 'latex' | 'both')}
                     disabled={isAnalyzing}
                     className="mr-2 text-primary-600 focus:ring-primary-500"
                   />
-                  <span className="text-sm text-neutral-600">LaTeX Source</span>
+                  <span className="text-sm text-neutral-600">LaTeX Only</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="reportFormat"
+                    value="both"
+                    checked={reportFormat === 'both'}
+                    onChange={(e) => setReportFormat(e.target.value as 'latex' | 'both')}
+                    disabled={isAnalyzing}
+                    className="mr-2 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-neutral-600">Both Formats (PDF, LaTeX)</span>
                 </label>
               </div>
               <p className="text-xs text-neutral-500">
-                Choose PDF for immediate viewing or LaTeX for custom formatting
+                Choose "Both Formats" to get both PDF and LaTeX files for maximum flexibility
               </p>
             </div>
 
@@ -238,6 +246,53 @@ export default function AnalysisPage() {
           </form>
         </div>
 
+        {/* Progress Bar */}
+        {showProgress && (
+          <div className="bg-white rounded-xl border border-neutral-200 p-6">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-neutral-900">Analysis Progress</h3>
+                <span className="text-sm text-neutral-600">{progress}%</span>
+              </div>
+              
+              <div className="w-full bg-neutral-200 rounded-full h-2">
+                <div 
+                  className="bg-primary-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                {isAnalyzing && (
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-600 border-t-transparent"></div>
+                )}
+                <p className="text-sm text-neutral-700">{currentStep}</p>
+              </div>
+              
+              {progress > 0 && progress < 100 && (
+                <div className="bg-neutral-50 rounded-lg p-3">
+                  <p className="text-xs text-neutral-600">
+                    Analyzing stock data and generating professional investment report...
+                  </p>
+                </div>
+              )}
+              
+              {progress === 100 && !isAnalyzing && (
+                <div className="bg-success-50 border border-success-200 rounded-lg p-3">
+                  <div className="flex items-center">
+                    <div className="rounded-full bg-success-100 p-1 mr-2">
+                      <svg className="w-3 h-3 text-success-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <p className="text-sm text-success-700 font-medium">Analysis completed successfully!</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Analysis Result */}
         {result && (
           <div className="bg-white rounded-xl border border-neutral-200">
@@ -254,14 +309,23 @@ export default function AnalysisPage() {
                         Analysis completed • {new Date(result.data?.analysis_timestamp || '').toLocaleDateString()}
                       </p>
                     </div>
-                    {result.report_path && (
-                      <button
-                        onClick={downloadReport}
-                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors"
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Report
-                      </button>
+                    {result.data?.report_id && (
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => downloadReport('pdf')}
+                          className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          PDF
+                        </button>
+                        <button
+                          onClick={() => downloadReport('latex')}
+                          className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          LaTeX
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>

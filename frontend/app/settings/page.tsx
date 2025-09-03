@@ -106,8 +106,6 @@ export default function SettingsPage() {
                   aria-label="Preferred Model"
                 >
                   <option value="deepseek/deepseek-chat">DeepSeek Chat</option>
-                  <option value="microsoft/Phi-3-mini-4k-instruct">Phi-3 Mini</option>
-                  <option value="mistralai/Mistral-7B-Instruct-v0.1">Mistral 7B</option>
                 </select>
               </div>
 
@@ -134,25 +132,7 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* Theme */}
-              <div>
-                <label className="block text-sm font-medium text-neutral-900 mb-2">
-                  Theme
-                </label>
-                <select
-                  value={preferences.theme}
-                  onChange={(e) => setPreferences({
-                    ...preferences,
-                    theme: e.target.value
-                  })}
-                  className="block w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  aria-label="Theme"
-                >
-                  <option value="light">Light</option>
-                  <option value="dark">Dark</option>
-                  <option value="auto">Auto</option>
-                </select>
-              </div>
+
 
               {/* Save Button */}
               <div className="pt-4 border-t border-neutral-200">

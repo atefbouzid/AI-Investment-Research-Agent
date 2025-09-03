@@ -42,7 +42,7 @@ export default function Layout({ children }: LayoutProps) {
               <div className="w-8 h-8 bg-primary-900 rounded-lg flex items-center justify-center">
                 <TrendingUp className="h-5 w-5 text-white" />
               </div>
-              <span className="text-lg font-semibold text-neutral-900">InvestAI</span>
+              <span className="text-lg font-semibold text-neutral-900">InvestiAgent</span>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -85,7 +85,7 @@ export default function Layout({ children }: LayoutProps) {
               <div className="w-8 h-8 bg-primary-900 rounded-lg flex items-center justify-center">
                 <TrendingUp className="h-5 w-5 text-white" />
               </div>
-              <span className="text-lg font-semibold text-neutral-900">InvestAI</span>
+              <span className="text-lg font-semibold text-neutral-900">InvestiAgent</span>
             </div>
           </div>
           <nav className="flex-1 px-4 py-6 space-y-1">
@@ -139,13 +139,15 @@ export default function Layout({ children }: LayoutProps) {
                 <User className="h-4 w-4 text-white" />
               )}
             </div>
-            <button
-              onClick={logout}
-              className="flex items-center space-x-2 px-3 py-1.5 text-sm font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
-            >
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:block">Sign out</span>
-            </button>
+            <div className="absolute right-6 top-1/2 -translate-y-1/2">
+              <button
+                onClick={logout}
+                className="flex items-center space-x-2 px-3 py-1.5 text-sm font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:block">Sign out</span>
+              </button>
+            </div>
           </div>
         </div>
 

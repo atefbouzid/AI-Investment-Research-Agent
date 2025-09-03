@@ -192,9 +192,7 @@ def main():
     print("   Frontend: http://localhost:3000")
     print("   Backend API: http://localhost:8000")
     print("   API Docs: http://localhost:8000/docs")
-    print("\n👤 Demo Login:")
-    print("   Username: admin")
-    print("   Password: admin")
+    print("\n👤 Create an account or login with your existing credentials")
     print("\n❌ Press Ctrl+C to stop all services")
     
     # Monitor processes

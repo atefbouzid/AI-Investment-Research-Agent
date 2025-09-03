@@ -19,7 +19,7 @@ The Investment Research Platform now includes a comprehensive report management 
 ### 🧹 Automatic Cleanup
 - Background task runs daily at 2 AM
 - Removes reports older than 5 days automatically
-- Admin endpoint for manual cleanup
+- User-friendly selection-based deletion interface
 - Optimizes storage and maintains performance
 
 ## API Endpoints
@@ -67,11 +67,7 @@ DELETE /reports/{report_id}
 Authorization: Bearer {token}
 ```
 
-### Admin Cleanup (Admin Only)
-```http
-POST /admin/cleanup-reports
-Authorization: Bearer {admin_token}
-```
+
 
 ## Database Schema
 
@@ -176,7 +172,7 @@ const downloadReport = async (reportId: string, filename: string) => {
 ### Cleanup Strategy
 - **5-day retention**: Balances user access with storage costs
 - **Daily cleanup**: Runs during low-traffic hours (2 AM)
-- **Admin control**: Manual cleanup available when needed
+- **User control**: Selection-based deletion for flexible report management
 
 ### Performance Considerations
 - Binary data stored efficiently in PostgreSQL
@@ -196,10 +192,10 @@ const downloadReport = async (reportId: string, filename: string) => {
 - No orphaned files on filesystem
 - Secure binary storage in database
 
-### Admin Functions
-- Cleanup endpoint restricted to admin role
+### User Functions
+- Selection-based deletion interface for flexible report management
 - Audit logging for all operations
-- Manual cleanup capability
+- Secure access to user's own reports only
 
 ## Migration from File Storage
 

@@ -51,7 +51,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
       if (!response.ok) {
-        throw new Error('Login failed')
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Login failed')
       }
 
       const data = await response.json()
@@ -67,7 +68,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return true
     } catch (error) {
       console.error('Login error:', error)
-      toast.error('Login failed. Please check your credentials.')
+      const errorMessage = error instanceof Error ? error.message : 'Login failed. Please check your credentials.'
+      toast.error(errorMessage)
       return false
     } finally {
       setIsLoading(false)

@@ -52,17 +52,20 @@ class LaTeXReportGenerator:
             'warning_color': '0.8,0.2,0.0'  # RGB for red (negative)
         }
     
-    def generate_report(self, llm_analysis: Dict, output_filename: Optional[str] = None) -> str:
+    def generate_report(self, llm_analysis: Dict, output_filename: Optional[str] = None, progress_callback=None) -> tuple[Optional[str], str]:
         """
         Generate complete investment research report.
         
         Args:
             llm_analysis: Output from InvestmentAnalysisAgent.analyze_investment()
             output_filename: Optional custom filename (without extension)
+            progress_callback: Optional function to call with progress updates
             
         Returns:
-            str: Path to generated PDF file
+            tuple: (pdf_path, tex_path) - pdf_path may be None if compilation fails
         """
+        if progress_callback:
+            progress_callback("Starting LaTeX report generation...")
         print("GENERATING LATEX INVESTMENT REPORT")
         print("="*60)
         
@@ -76,26 +79,56 @@ class LaTeXReportGenerator:
             date_str = datetime.now().strftime("%Y%m%d")
             output_filename = f"{ticker}_Investment_Research_{date_str}"
         
+        if progress_callback:
+            progress_callback("Creating LaTeX document structure...")
+        
         # Create LaTeX document
         latex_content = self._create_latex_document(llm_analysis)
         
-        # Save LaTeX file
+        if progress_callback:
+            progress_callback("Saving LaTeX source file...")
+        
+        # Save LaTeX file (ALWAYS save this, regardless of PDF compilation success)
         tex_file = self.output_dir / f"{output_filename}.tex"
         with open(tex_file, 'w', encoding='utf-8') as f:
             f.write(latex_content)
         
         print(f"LaTeX source saved: {tex_file}")
+        tex_path = str(tex_file)
+        
+        if progress_callback:
+            progress_callback("Compiling LaTeX to PDF...")
         
         # Compile to PDF
-        pdf_file = self._compile_to_pdf(tex_file)
-        
-        if pdf_file and pdf_file.exists():
-            print(f"PDF report generated: {pdf_file}")
-            print("Report contains: Executive Summary, Financial Analysis, Recommendations")
-            return str(pdf_file)
-        else:
-            print("PDF compilation failed, but LaTeX source is available")
-            return str(tex_file)
+        try:
+            pdf_file = self._compile_to_pdf(tex_file)
+            
+            if pdf_file and pdf_file.exists():
+                print(f"PDF report generated: {pdf_file}")
+                print("Report contains: Executive Summary, Financial Analysis, Recommendations")
+                if progress_callback:
+                    progress_callback("PDF compilation successful!")
+                return str(pdf_file), tex_path
+            else:
+                # Check if we have just warnings (PDF might still exist)
+                potential_pdf = tex_file.with_suffix('.pdf')
+                if potential_pdf.exists():
+                    print("PDF exists despite compilation warnings - using it anyway")
+                    if progress_callback:
+                        progress_callback("PDF compilation completed with warnings")
+                    return str(potential_pdf), tex_path
+                else:
+                    if progress_callback:
+                        progress_callback("PDF compilation failed, but LaTeX source is available for download")
+                    print("ERROR: PDF compilation failed!")
+                    print(f"LaTeX source saved at: {tex_file}")
+                    return None, tex_path
+        except Exception as e:
+            if progress_callback:
+                progress_callback(f"PDF compilation failed: {str(e)}, but LaTeX source is available for download")
+            print(f"ERROR: PDF compilation failed with exception: {e}")
+            print(f"LaTeX source saved at: {tex_file}")
+            return None, tex_path
     
     def _create_latex_document(self, analysis: Dict) -> str:
         """Create complete LaTeX document from analysis."""
@@ -170,7 +203,6 @@ class LaTeXReportGenerator:
 \\fancyhead[L]{{\\textcolor{{primarycolor}}{{Investment Research Report}}}}
 \\fancyhead[R]{{\\textcolor{{primarycolor}}{{\\thepage}}}}
 \\renewcommand{{\\headrulewidth}}{{0.5pt}}
-\\renewcommand{{\\headrule}}{{\\color{{primarycolor}}\\hrule width\\headwidth height\\headrulewidth \\vskip-\\headrulewidth}}
 
 % Section styling
 \\titleformat{{\\section}}
@@ -282,6 +314,10 @@ class LaTeXReportGenerator:
             clean_point = self._clean_latex_text(str(point))
             key_points_latex += f"\\item {clean_point}\n"
         
+        # If no key points, add placeholder
+        if not key_points_latex.strip():
+            key_points_latex = "\\item Analysis of key investment points is incorporated in the executive summary above.\n"
+        
         return f"""
 \\section{{Executive Summary}}
 
@@ -321,7 +357,7 @@ class LaTeXReportGenerator:
             metric_name = self._clean_latex_text(metric.replace('_', ' ').title())
             metrics_table += f"{metric_name} & {formatted_value} \\\\\n"
         
-        metrics_table += "\\bottomrule\n\\end{tabular}\n\\caption{Key Financial Metrics}\n\\end{table}\n"
+        metrics_table += "\\bottomrule\n\\end{tabular}\n\\caption{{Key Financial Metrics}}\n\\end{table}\n"
         
         return f"""
 \\section{{Financial Analysis}}
@@ -356,6 +392,10 @@ class LaTeXReportGenerator:
         themes_latex = ""
         for theme in key_themes:
             themes_latex += f"\\item {self._clean_latex_text(str(theme))}\n"
+        
+        # If no themes, add placeholder
+        if not themes_latex.strip():
+            themes_latex = "\\item No specific market themes identified in the current analysis.\n"
         
         return f"""
 \\section{{Market Sentiment Analysis}}
@@ -394,9 +434,17 @@ class LaTeXReportGenerator:
         for advantage in advantages:
             advantages_latex += f"\\item {self._clean_latex_text(str(advantage))}\n"
         
+        # If no advantages, add placeholder
+        if not advantages_latex.strip():
+            advantages_latex = "\\item No specific competitive advantages identified in the analysis.\n"
+        
         challenges_latex = ""
         for challenge in challenges:
             challenges_latex += f"\\item {self._clean_latex_text(str(challenge))}\n"
+        
+        # If no challenges, add placeholder
+        if not challenges_latex.strip():
+            challenges_latex = "\\item No major challenges identified in the analysis.\n"
         
         return f"""
 \\section{{Competitive Analysis}}
@@ -440,6 +488,10 @@ class LaTeXReportGenerator:
         for catalyst in key_catalysts:
             catalysts_latex += f"\\item {self._clean_latex_text(str(catalyst))}\n"
         
+        # If no catalysts, add placeholder
+        if not catalysts_latex.strip():
+            catalysts_latex = "\\item Key investment catalysts are incorporated in the investment thesis above.\n"
+        
         return f"""
 \\section{{Investment Thesis}}
 
@@ -476,9 +528,17 @@ class LaTeXReportGenerator:
         for risk_item in primary_risks:
             risks_latex += f"\\item \\risk{{{self._clean_latex_text(str(risk_item))}}}\n"
         
+        # If no specific risks, add placeholder
+        if not risks_latex.strip():
+            risks_latex = "\\item No specific risk factors identified beyond general market risks.\n"
+        
         mitigation_latex = ""
         for mitigation in risk_mitigation:
             mitigation_latex += f"\\item {self._clean_latex_text(str(mitigation))}\n"
+        
+        # If no mitigation strategies, add placeholder
+        if not mitigation_latex.strip():
+            mitigation_latex = "\\item Standard portfolio diversification and position sizing recommended.\n"
         
         return f"""
 \\section{{Risk Assessment}}
@@ -607,28 +667,35 @@ Model Used & {model_used} \\\\
         cleaned_text = str(text)
         
         # Step 1: Handle markdown-style formatting BEFORE escaping
-        # Replace **text** with \textbf{text} for bold
         import re
-        cleaned_text = re.sub(r'\*\*(.*?)\*\*', r'\\textbf{\1}', cleaned_text)
         
-        # Step 2: Use a simpler approach - escape characters but avoid double-escaping \textbf
-        # First, temporarily replace \textbf commands with safe placeholders
+        # Convert markdown headers to LaTeX sections first (to avoid # escaping issues)
+        cleaned_text = re.sub(r'####\s*(.*?)(?=\n|$)', r'\\subsubsection{\1}', cleaned_text, flags=re.MULTILINE)
+        cleaned_text = re.sub(r'###\s*(.*?)(?=\n|$)', r'\\subsection{\1}', cleaned_text, flags=re.MULTILINE)
+        cleaned_text = re.sub(r'##\s*(.*?)(?=\n|$)', r'\\subsection{\1}', cleaned_text, flags=re.MULTILINE)
+        cleaned_text = re.sub(r'#\s*(.*?)(?=\n|$)', r'\\section{\1}', cleaned_text, flags=re.MULTILINE)
+        
+        # Convert markdown horizontal rules to LaTeX
+        cleaned_text = re.sub(r'^---+\s*$', r'\\hrule', cleaned_text, flags=re.MULTILINE)
+        
+        # Step 2: Protect existing LaTeX commands FIRST (before adding new ones)
         protected_commands = []
         
-        # Find all \textbf{...} commands
-        while True:
-            match = re.search(r'\\textbf\{([^}]*)\}', cleaned_text)
-            if not match:
-                break
-            
-            # Use a unique placeholder that won't conflict with escaping
-            placeholder = f"XXXLATEXBOLDXXX{len(protected_commands)}XXXLATEXBOLDXXX"
+        # Find all existing LaTeX commands (starting with backslash)
+        latex_command_pattern = r'\\[a-zA-Z]+(?:\{[^}]*\})?'
+        for match in re.finditer(latex_command_pattern, cleaned_text):
+            placeholder = f"XXXLATEXCMDXXX{len(protected_commands)}XXXLATEXCMDXXX"
             protected_commands.append(match.group())
             cleaned_text = cleaned_text.replace(match.group(), placeholder, 1)
         
-        # Step 3: Escape special characters
+        # Step 2b: Now safely convert **text** to \textbf{text} for bold
+        # This is done after protecting existing commands to avoid conflicts
+        # Use non-greedy matching and exclude line breaks to avoid paragraph issues
+        cleaned_text = re.sub(r'\*\*([^*\n]+?)\*\*', r'\\textbf{\1}', cleaned_text)
+        
+        # Step 3: Escape special characters (but NOT backslashes since we protected commands)
         latex_replacements = [
-            ('\\', '\\textbackslash{}'),  # Handle remaining backslashes
+            # Note: We don't escape backslashes here to avoid interfering with LaTeX commands
             ('{', '\\{'),
             ('}', '\\}'),
             ('$', '\\$'),
@@ -646,8 +713,13 @@ Model Used & {model_used} \\\\
         
         # Step 4: Restore protected LaTeX commands
         for i, command in enumerate(protected_commands):
-            placeholder = f"XXXLATEXBOLDXXX{i}XXXLATEXBOLDXXX"
+            placeholder = f"XXXLATEXCMDXXX{i}XXXLATEXCMDXXX"
             cleaned_text = cleaned_text.replace(placeholder, command)
+        
+        # Step 5: Final cleanup - ensure no unmatched braces for \textbf commands
+        # Find any incomplete \textbf commands and remove them
+        cleaned_text = re.sub(r'\\textbf\s*$', '', cleaned_text)  # Remove trailing \textbf
+        cleaned_text = re.sub(r'\\textbf\s+(?![{])', '\\textbf{} ', cleaned_text)  # Fix \textbf without opening brace
         
         return cleaned_text
     def _safe_title(self, value) -> str:
@@ -681,20 +753,52 @@ Model Used & {model_used} \\\\
                 
                 if result.returncode != 0:
                     print(f"LaTeX compilation failed on pass {i+1}")
-                    print(f"Error: {result.stderr}")
+                    print(f"Return code: {result.returncode}")
+                    if result.stdout:
+                        print(f"STDOUT:\n{result.stdout}")
+                    if result.stderr:
+                        print(f"STDERR:\n{result.stderr}")
+                    
+                    # Save the error log for debugging
+                    log_file = tex_file.with_suffix('.log')
+                    if log_file.exists():
+                        print(f"\nLaTeX log file content:")
+                        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+                            log_content = f.read()
+                            # Show last 50 lines of log which usually contain the error
+                            log_lines = log_content.split('\n')
+                            print('\n'.join(log_lines[-50:]))
+                    
                     os.chdir(original_cwd)
                     return None
             
-            # Return to original directory
-            os.chdir(original_cwd)
+            # Check if PDF was created (while still in output directory)
+            pdf_filename = tex_file.stem + '.pdf'
+            pdf_file_in_output = Path(pdf_filename)  # Just filename, relative to current dir
             
-            # Check if PDF was created
-            pdf_file = tex_file.with_suffix('.pdf')
-            if pdf_file.exists():
-                print("PDF compiled successfully")
-                return pdf_file
+            print(f"DEBUG: Checking for PDF: {pdf_file_in_output.absolute()}")
+            print(f"DEBUG: Current directory: {os.getcwd()}")
+            print(f"DEBUG: PDF exists check: {pdf_file_in_output.exists()}")
+            
+            # Also check if file was created but with compilation warnings
+            if pdf_file_in_output.exists():
+                file_size = pdf_file_in_output.stat().st_size
+                print(f"PDF compiled successfully: {pdf_file_in_output.absolute()} ({file_size} bytes)")
+                # Return to original directory
+                os.chdir(original_cwd)
+                # Return the full path to the PDF
+                return self.output_dir / pdf_filename
             else:
                 print("PDF file not found after compilation")
+                print(f"Expected: {pdf_file_in_output.absolute()}")
+                
+                # List all files in current directory for debugging
+                import glob
+                all_files = glob.glob("*.*")
+                print(f"DEBUG: Files in current directory: {all_files}")
+                
+                # Return to original directory
+                os.chdir(original_cwd)
                 return None
                 
         except subprocess.TimeoutExpired:
