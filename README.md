@@ -10,7 +10,7 @@
 
 **A comprehensive AI-powered investment research platform built with modern web technologies and advanced machine learning models.**
 
-[🎥 **Watch Demo Video**](https://www.loom.com/share/33a87afb172542f9a8961691cbd01b06?sid=723d96b1-51b7-47f4-a920-d886f7e64143)
+[🎥 **Watch Demo Video**](https://www.loom.com/share/33a87afb172542f9a8961691cbd01b06?sid=b7ab9995-ea60-48ee-a3d0-5f9924b803c0)
 
 </div>
 
