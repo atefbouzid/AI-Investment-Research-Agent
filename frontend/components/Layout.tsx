@@ -128,7 +128,7 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex items-center space-x-4">
             <div className="hidden sm:flex sm:items-center sm:space-x-2">
               <span className="text-sm font-medium text-neutral-900">{user?.username}</span>
-              <span className="text-2xs text-neutral-500 uppercase tracking-wide">{user?.role}</span>
+              <span className="text-xs text-neutral-500 uppercase tracking-wide">{user?.role}</span>
             </div>
             <div className="w-8 h-8 bg-primary-900 rounded-lg flex items-center justify-center">
               {user?.username ? (
@@ -139,15 +139,13 @@ export default function Layout({ children }: LayoutProps) {
                 <User className="h-4 w-4 text-white" />
               )}
             </div>
-            <div className="absolute right-6 top-1/2 -translate-y-1/2">
-              <button
-                onClick={logout}
-                className="flex items-center space-x-2 px-3 py-1.5 text-sm font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="hidden sm:block">Sign out</span>
-              </button>
-            </div>
+            <button
+              onClick={logout}
+              className="flex items-center space-x-2 px-3 py-1.5 text-sm font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:block">Sign out</span>
+            </button>
           </div>
         </div>
 
