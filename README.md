@@ -78,6 +78,10 @@ The AI Investment Research Agent is a sophisticated full-stack platform that lev
 
 ## 🖼️ Screenshots
 
+### 🏗️ Solution Overview
+![Solution Overview](imgs/solution_overview.jpg)
+*Complete system architecture and workflow overview*
+
 ### 🔐 Login Interface
 ![Login Interface](imgs/screenshot-login.png)
 *Secure user authentication with modern UI design*
