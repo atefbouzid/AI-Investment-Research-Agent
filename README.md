@@ -114,9 +114,9 @@ graph TB
 
 ### Prerequisites
 
-- **Python 3.8+** with pip
-- **Node.js 16+** with npm
-- **PostgreSQL 12+** (optional, SQLite fallback available)
+- **Python 3.11+** with pip
+- **Node.js 20+** with npm
+- **PostgreSQL 15+**
 
 ### Option 1: One-Command Startup (Recommended)
 
